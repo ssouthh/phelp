@@ -1,10 +1,8 @@
 script_name("Combined Script")
 script_author("ChatGPT & Gemini")
-script_version("2.5")
+script_version("2.0") -- Важно: эта переменная должна быть здесь
 
 require 'moonloader'
-local requests = require 'requests'
-local VERSION = "2.0" -- Текущая версия вашего скрипта
 local URL_VERSION = "https://raw.githubusercontent.com/ssouthh/phelp/refs/heads/main/version.json"
 local URL_SCRIPT = "https://raw.githubusercontent.com/ssouthh/phelp/refs/heads/main/dep.lua"
 
@@ -58,32 +56,29 @@ local INVITE_TARGET_ID = nil
 local INVITE_TIMER = 0 -- Добавьте эту строку
 
 function checkUpdate()
-    lua_thread.create(function()
-        try {
-            function()
-                local response = requests.get(URL_VERSION)
-                if response.status_code == 200 then
-                    local json = response.json()
-                    if json and json.version > VERSION then
-                        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Найдено обновление! Скрипт обновляется с версии {ff4d4d}" .. VERSION .. " {ffffff}до {00ff00}" .. json.version, -1)
-                        
-                        local res = requests.get(URL_SCRIPT)
-                        if res.status_code == 200 then
-                            local file = io.open(thisScript().path, "wb")
-                            file:write(res.text)
-                            file:close()
-                            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Обновление завершено! Перезагрузка...", -1)
+    local fpath = os.getenv('TEMP') .. '\\version_ph.json'
+    downloadUrlToFile(URL_VERSION, fpath, function(id, status, p1, p2)
+        if status == 6 then -- 6 означает, что скачивание завершено
+            local f = io.open(fpath, 'r')
+            if f then
+                local content = f:read('*a')
+                f:close()
+                os.remove(fpath)
+                
+                -- Вытаскиваем версию из текста JSON без библиотек
+                local new_version = content:match('"version"%s*:%s*"(%d+%.%d+)"')
+                if new_version and tonumber(new_version) > tonumber(thisScript().version) then
+                    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Найдено обновление {00ff00}v" .. new_version .. "{ffffff}. Скачиваю...", -1)
+                    
+                    downloadUrlToFile(URL_SCRIPT, thisScript().path, function(id, status, p1, p2)
+                        if status == 6 then
+                            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Скрипт обновлен и перезагружен!", -1)
                             thisScript():reload()
                         end
-                    end
+                    end)
                 end
-            end,
-            catch {
-                function(error)
-                    print("[PH] Ошибка обновления: " .. error)
-                end
-            }
-        }
+            end
+        end
     end)
 end
 
