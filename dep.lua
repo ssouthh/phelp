@@ -3,6 +3,11 @@ script_author("ChatGPT & Gemini")
 script_version("2.5")
 
 require 'moonloader'
+local requests = require 'requests'
+local VERSION = "2.0" -- Текущая версия вашего скрипта
+local URL_VERSION = "https://raw.githubusercontent.com/ssouthh/phelp/refs/heads/main/version.json"
+local URL_SCRIPT = "https://raw.githubusercontent.com/ssouthh/phelp/refs/heads/main/dep.lua"
+
 local inicfg = require 'inicfg'
 local sampev = require 'lib.samp.events'
 
@@ -52,8 +57,39 @@ local LAST_CUFF_TARGET = nil
 local INVITE_TARGET_ID = nil
 local INVITE_TIMER = 0 -- Добавьте эту строку
 
+function checkUpdate()
+    lua_thread.create(function()
+        try {
+            function()
+                local response = requests.get(URL_VERSION)
+                if response.status_code == 200 then
+                    local json = response.json()
+                    if json and json.version > VERSION then
+                        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Найдено обновление! Скрипт обновляется с версии {ff4d4d}" .. VERSION .. " {ffffff}до {00ff00}" .. json.version, -1)
+                        
+                        local res = requests.get(URL_SCRIPT)
+                        if res.status_code == 200 then
+                            local file = io.open(thisScript().path, "wb")
+                            file:write(res.text)
+                            file:close()
+                            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Обновление завершено! Перезагрузка...", -1)
+                            thisScript():reload()
+                        end
+                    end
+                end
+            end,
+            catch {
+                function(error)
+                    print("[PH] Ошибка обновления: " .. error)
+                end
+            }
+        }
+    end)
+end
+
 function main()
     while not isSampAvailable() do wait(100) end
+    checkUpdate() -- Запуск проверки при старте
     
     wait(1000)
     local myId = select(2, sampGetPlayerIdByCharHandle(PLAYER_PED))
