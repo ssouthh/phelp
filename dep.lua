@@ -1,6 +1,6 @@
 script_name("Combined Script")
-script_author("ChatGPT")
-script_version("2.4")
+script_author("ChatGPT & Gemini")
+script_version("2.5")
 
 require 'moonloader'
 local inicfg = require 'inicfg'
@@ -39,120 +39,47 @@ local ccMode = false
 local BASE_X, BASE_Y = 1920, 1080
 local BASE_POS_X, BASE_POS_Y = 332, 750
 
+-- Переменные для испытательного срока
+local last_srok = {day = 0, month = 0, year = 0, hour = 0, min = 0, sec = 0}
+local srok_captured = false
+
 -- Флаги включения/отключения функций
 local CUFF_ENABLED = config.features.cuff_enabled
 local DEP_ENABLED = config.features.dep_enabled
 
 -- Глобальная переменная для хранения цели
 local LAST_CUFF_TARGET = nil
-
-local version = 1
-local update_url = "https://raw.githubusercontent.com/ssouthh/phelp/main/version.json"
-local script_path = thisScript().path
-
-function check_updates()
-    downloadUrlToFile(update_url, os.getenv("TEMP") .. "\\version.json", function(id, status, p1, p2)
-        if status == 6 then
-            local f = io.open(os.getenv("TEMP") .. "\\version.json", "r")
-            if f then
-                local content = f:read("*a")
-                f:close()
-                os.remove(os.getenv("TEMP") .. "\\version.json")
-                local new_version = content:match('"version":%s*(%d+)')
-                local download_link = content:match('"download_url":%s*"(.-)"')
-                if new_version and tonumber(new_version) > version then
-                    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Найдено обновление! Загружаю...", -1)
-                    update_script(download_link)
-                end
-            end
-        end
-    end)
-end
-
-function update_script(link)
-    downloadUrlToFile(link, script_path, function(id, status, p1, p2)
-        if status == 6 then
-            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Скрипт обновлен! Перезагружаю...", -1)
-            thisScript():reload()
-        end
-    end)
-end
+local INVITE_TARGET_ID = nil
+local INVITE_TIMER = 0 -- Добавьте эту строку
 
 function main()
     while not isSampAvailable() do wait(100) end
     
     wait(1000)
-
-    check_updates()
-
     local myId = select(2, sampGetPlayerIdByCharHandle(PLAYER_PED))
     local autoNick = nil
     if myId and myId >= 0 then autoNick = sampGetPlayerNickname(myId) end
     
     -- Логика определения ника
     if config.nickname.manual ~= "" then
-        -- Если установлен ручной ник
         MY_NICKNAME = config.nickname.manual
         sampAddChatMessage("{3fa9f5}[PH] {ffffff}Используется ручной ник: {6fc3ff}" .. MY_NICKNAME, -1)
-        
-        -- Если проверка включена, сохраняем текущий автоматический ник для сравнения
         if config.nickname.check_enabled and autoNick then
             if config.nickname.saved == "" then
                 config.nickname.saved = autoNick
                 inicfg.save(config, config_name)
-                sampAddChatMessage("{3fa9f5}[PH] {ffffff}Автоматический ник сохранён: {6fc3ff}" .. autoNick, -1)
             elseif config.nickname.saved ~= autoNick then
-                sampAddChatMessage("{3fa9f5}[PH] {ffff00}Сохранённый ник (" .. config.nickname.saved .. ") не совпадает с текущим (" .. autoNick .. ")", -1)
                 config.nickname.saved = autoNick
                 inicfg.save(config, config_name)
             end
         end
     elseif autoNick then
-        -- Если нет ручного ника, используем автоматический
         MY_NICKNAME = autoNick
-        
-        if config.nickname.check_enabled then
-            if config.nickname.saved == "" then
-                config.nickname.saved = MY_NICKNAME
-                inicfg.save(config, config_name)
-                sampAddChatMessage("{3fa9f5}[PH] {ffffff}Ник сохранён: {6fc3ff}" .. MY_NICKNAME, -1)
-            elseif config.nickname.saved ~= MY_NICKNAME then
-                sampAddChatMessage("{3fa9f5}[PH] {ffff00}Ник в настройках (" .. config.nickname.saved .. ") не совпадает с текущим (" .. MY_NICKNAME .. "). Обновляю...", -1)
-                config.nickname.saved = MY_NICKNAME
-                inicfg.save(config, config_name)
-            else
-                sampAddChatMessage("{3fa9f5}[PH] {ffffff}Используется ник: {6fc3ff}" .. MY_NICKNAME, -1)
-            end
-        else
-            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Проверка ника отключена. Используется: {6fc3ff}" .. MY_NICKNAME, -1)
-        end
-    end
-    
-    if not MY_NICKNAME then
-        sampAddChatMessage("{3fa9f5}[PH] {ff4d4d}Не удалось получить ваш ник", -1)
-        return
     end
     
     tag = config.tag.value ~= "" and config.tag.value or nil
     drawEnabled = config.tag.draw
     ccMode = config.tag.ccmode
-
-    if tag then
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Текущий тег: {6fc3ff}[" .. tag .. "]", -1)
-    else
-        sampAddChatMessage("{3fa9f5}[PH] {ff4d4d}Тег не установлен (/stag <тег>)", -1)
-    end
-
-    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Отображение HUD: " .. (drawEnabled and "{00ff00}ВКЛ" or "{ff0000}ВЫКЛ"), -1)
-    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Режим C.C.: " .. (ccMode and "{00ff00}ВКЛ" or "{ff0000}ВЫКЛ"), -1)
-    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Проверка ника: " .. (config.nickname.check_enabled and "{00ff00}ВКЛ" or "{ff0000}ВЫКЛ"), -1)
-
-    if config.nickname.manual ~= "" then
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Ручной ник: {6fc3ff}" .. config.nickname.manual, -1)
-    end
-    
-    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Авто /gotome: " .. (CUFF_ENABLED and "{00ff00}ВКЛ" or "{ff0000}ВЫКЛ"), -1)
-    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Команды департамента: " .. (DEP_ENABLED and "{00ff00}ВКЛ" or "{ff0000}ВЫКЛ"), -1)
 
     -- Регистрация команд
     sampRegisterChatCommand("stag", cmdSetTag)
@@ -164,6 +91,8 @@ function main()
     sampRegisterChatCommand("phelp", cmdPHelp)
     sampRegisterChatCommand("pcuff", cmdToggleCuff)
     sampRegisterChatCommand("pdep", cmdToggleDep)
+    sampRegisterChatCommand("sk", cmdSrok)
+    sampRegisterChatCommand("invzv", cmdInviteZv)
 
     font = renderCreateFont("Segoe UI Semibold", 14, FCR_BOLD)
 
@@ -173,17 +102,77 @@ function main()
     end
 end
 
+-- ==========================================================
+-- ОБРАБОТКА ИСПЫТАТЕЛЬНОГО СРОКА
+-- ==========================================================
+
+function cmdSrok(arg)
+    if not srok_captured then
+        sampAddChatMessage("{3fa9f5}[PH] {ff4d4d}Ошибка: {ffffff}Сначала откройте диалог со статистикой!", -1)
+        return
+    end
+
+    local hours = tonumber(arg)
+    if not hours then
+        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Используй: {6fc3ff}/sk [часы]", -1)
+        return
+    end
+
+    local old_time = os.time({
+        day = last_srok.day, month = last_srok.month, year = last_srok.year,
+        hour = last_srok.hour, min = last_srok.min, sec = last_srok.sec
+    })
+
+    local new_time = old_time + (hours * 3600)
+    local result = os.date("%d.%m.%Y %H:%M:%S", new_time)
+
+    sampAddChatMessage("{3fa9f5}[PH] {ffffff}Исп. срок ("..hours.."ч) истекает: {00ff00}"..result, -1)
+end
+
+function cmdInviteZv(arg)
+    local id = tonumber(arg)
+    if not id or not sampIsPlayerConnected(id) then
+        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Используй: {6fc3ff}/invzv [ID]", -1)
+        return
+    end
+
+    lua_thread.create(function()
+        sampSendChat("/me снял с пояса связку ключей, после чего достал один ключ от раздевалки из связки")
+        wait(1500)
+        sampSendChat("/todo Удачной работы*протягивая ключ от раздевалки человеку")
+        wait(500)
+        sampSendChat("/invite " .. id)
+        
+        INVITE_TARGET_ID = id
+        INVITE_TIMER = os.time() -- Запоминаем время ввода команды
+    end)
+end
+
+-- ==========================================================
+-- СОБЫТИЯ
+-- ==========================================================
+
+function sampev.onShowDialog(id, style, title, button1, button2, text)
+    if id == 0 then
+        local pattern = "Последнее повышение:.-(%d%d)%.(%d%d)%.(%d%d%d%d)%s+(%d%d):(%d%d):(%d%d)"
+        local d, m, y, hh, mm, ss = text:match(pattern)
+        
+        if d and m and y then
+            last_srok = {day = tonumber(d), month = tonumber(m), year = tonumber(y), hour = tonumber(hh), min = tonumber(mm), sec = tonumber(ss)}
+            srok_captured = true
+            -- Теперь выводит и дату, и время
+            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Дата последнего повышения захвачена: {6fc3ff}"..d.."."..m.."."..y.." "..hh..":"..mm..":"..ss, -1)
+        end
+    end
+end
+
 function sampev.onServerMessage(color, text)
     if not MY_NICKNAME then return end
-    
     if not CUFF_ENABLED then return end
 
     if string.match(text, MY_NICKNAME .. "%s+начал%(а%) сковывать") then
         local target = string.match(text, MY_NICKNAME .. "%s+начал%(а%) сковывать%s+(%S+)")
-        if target then
-            LAST_CUFF_TARGET = target:gsub(",.*$", "")
-        end
-        
+        if target then LAST_CUFF_TARGET = target:gsub(",.*$", "") end
         lua_thread.create(function()
             wait(250)
             sampSendChat("/me сняв наручники с пояса, надел их на кисти человека")
@@ -192,33 +181,55 @@ function sampev.onServerMessage(color, text)
 
     if string.match(text, "^%*%s+" .. MY_NICKNAME .. "%s+перестал%(а%) тащить за собой игрока") then
         lua_thread.create(function()
-            wait(100) -- Та самая задержка 100мс
+            wait(100)
             sampSendChat("/me отпустил цепь наручников")
         end)
     end
     
     if string.match(text, MY_NICKNAME .. "%s+сковал%(а%)") then
         local target = string.match(text, MY_NICKNAME .. "%s+сковал%(а%)%s+(%S+)")
-        
-        if not target then
-            target = string.match(text, MY_NICKNAME .. "%s+сковал%(а%)%s+(.-),")
-        end
-        
-        if not target and LAST_CUFF_TARGET then
-            target = LAST_CUFF_TARGET
-        end
-        
+        if not target then target = string.match(text, MY_NICKNAME .. "%s+сковал%(а%)%s+(.-),") end
+        if not target and LAST_CUFF_TARGET then target = LAST_CUFF_TARGET end
         if target then
             target = target:gsub("[,%.]*$", "")
-            
             lua_thread.create(function()
                 wait(100)
                 sampSendChat("/gotome " .. target)
                 wait(1000)
                 sampSendChat("/me схватив человека за цепь наручников, ведет его перед собой")
             end)
-            
             LAST_CUFF_TARGET = nil
+        end
+    end
+
+-- 1. Очистка текста от цветов
+    local cleanText = text:gsub("{%x+}", "")
+    
+    -- 2. Поиск системной строки о принятии предложения
+    -- Паттерн вырезает ник принявшего игрока: (.+)
+    local name = cleanText:match("%[Информация%] (.+) принял ваше предложение вступить к вам в организацию%.")
+    
+    if name then
+        local targetName = "Unknown"
+        if INVITE_TARGET_ID and sampIsPlayerConnected(INVITE_TARGET_ID) then
+            targetName = sampGetPlayerNickname(INVITE_TARGET_ID)
+        end
+        if INVITE_TARGET_ID and name == targetName and (os.time() - INVITE_TIMER) <= 60 then
+            lua_thread.create(function()
+                wait(500)
+                sampSendChat("/me достав телефон из правого кармана брюк, зашел в базу сотрудников")
+                wait(1500)
+                sampSendChat("/me найдя нужного сотрудника, изменил о нем информацию, и вышел с базы")
+                wait(1500)
+                sampSendChat("/me убрал телефон в правый карман брюк")
+                wait(500)
+                sampSendChat(string.format("/giverank %d 4", INVITE_TARGET_ID))
+                wait(500)
+                sampSendChat(string.format("/settag %d PD", INVITE_TARGET_ID))
+                sampAddChatMessage("{3fa9f5}[PH] {ffffff}Игрок {6fc3ff}"..name.."{ffffff} принят на 4 ранг с тегом PD.", -1)
+                INVITE_TARGET_ID = nil
+                INVITE_TIMER = 0
+            end)
         end
     end
     
@@ -231,6 +242,10 @@ function sampev.onServerMessage(color, text)
         sampSendChat("/key")
     end
 end
+
+-- ==========================================================
+-- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ И КОМАНДЫ
+-- ==========================================================
 
 function drawTag()
     if not tag then return end
@@ -252,7 +267,6 @@ function drawTag()
         local ccLabelWidth = renderGetFontDrawTextLength(font, ccLabel, true)
         local ccStatus = "Enable"
         local fullCcText = ccLabel .. ccStatus
-        
         renderFontDrawText(font, fullCcText, x + 1, ccY + 1, shadow)
         renderFontDrawText(font, fullCcText, x - 1, ccY + 1, shadow)
         renderFontDrawText(font, fullCcText, x + 1, ccY - 1, shadow)
@@ -263,10 +277,7 @@ function drawTag()
 end
 
 function cmdSetTag(arg)
-    if arg == nil or arg == "" then
-        sampAddChatMessage(tag and "{3fa9f5}[PH] {ffffff}Текущий тег: {6fc3ff}[" .. tag .. "]" or "{3fa9f5}[PH] {ff4d4d}Тег не установлен", -1)
-        return
-    end
+    if arg == nil or arg == "" then return end
     tag = arg
     config.tag.value = arg
     inicfg.save(config, config_name)
@@ -274,30 +285,18 @@ function cmdSetTag(arg)
 end
 
 function cmdDepartment(arg)
-    if not DEP_ENABLED then
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Команды департамента {ff0000}отключены{ffffff}. Включите через /pdep", -1)
-        return
-    end
-    
+    if not DEP_ENABLED then return end
     if not tag then
         sampAddChatMessage("{3fa9f5}[PH] {ff4d4d}Сначала задай тег через /stag", -1)
         return
     end
     local dep, message = arg:match("^(%S+)%s+(.+)$")
-    if not dep or not message then
-        sampAddChatMessage("{3fa9f5}[PH] {ff4d4d}Используй: /dep <департамент> <текст>", -1)
-        return
-    end
+    if not dep or not message then return end
     local chatMessage = ccMode and string.format("/d [%s] »c.c» [%s]: %s", tag, dep, message) or string.format("/d [%s] » [%s]: %s", tag, dep, message)
     sampSendChat(chatMessage)
 end
 
 function cmdToggleCC()
-    if not DEP_ENABLED then
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Команды департамента {ff0000}отключены{ffffff}. Включите через /pdep", -1)
-        return
-    end
-    
     ccMode = not ccMode
     config.tag.ccmode = ccMode
     inicfg.save(config, config_name)
@@ -315,32 +314,16 @@ function cmdNickCheck()
     config.nickname.check_enabled = not config.nickname.check_enabled
     inicfg.save(config, config_name)
     sampAddChatMessage("{3fa9f5}[PH] {ffffff}Проверка ника " .. (config.nickname.check_enabled and "{00ff00}включена" or "{ff0000}выключена"), -1)
-    if not config.nickname.check_enabled and config.nickname.manual ~= "" then
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Используется ручной ник: {6fc3ff}" .. config.nickname.manual, -1)
-    end
 end
 
 function cmdSetNick(arg)
-    if arg == nil or arg == "" then
-        if config.nickname.manual ~= "" then
-            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Текущий ручной ник: {6fc3ff}" .. config.nickname.manual, -1)
-        else
-            sampAddChatMessage("{3fa9f5}[PH] {ff4d4d}Ручной ник не установлен", -1)
-        end
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Используй: /snick <ник> (оставьте пустым для сброса)", -1)
-        return
-    end
-    
-    if arg == "clear" or arg == "сброс" then
+    if arg == "clear" then
         config.nickname.manual = ""
         inicfg.save(config, config_name)
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Ручной ник сброшен. Скрипт будет перезапущен", -1)
         thisScript():reload()
     else
         config.nickname.manual = arg
         inicfg.save(config, config_name)
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Ручной ник установлен: {6fc3ff}" .. arg, -1)
-        sampAddChatMessage("{3fa9f5}[PH] {ffffff}Скрипт будет перезапущен", -1)
         thisScript():reload()
     end
 end
@@ -362,44 +345,28 @@ end
 function cmdPHelp()
     local helpText = "Команды скрипта:\n\n" ..
                     "{3FA9F5}/stag <тег>{FFFFFF} - Установить тег департамента\n" ..
-                    "{3FA9F5}/dep <деп> <текст>{FFFFFF} - Отправить сообщение в департамент\n" ..
-                    "{3FA9F5}/depc{FFFFFF} - Переключить режим закрытого канала (C.C.)\n" ..
+                    "{3FA9F5}/dep <деп> <текст>{FFFFFF} - Сообщение в департамент\n" ..
+                    "{3FA9F5}/depc{FFFFFF} - Режим закрытого канала (C.C.)\n" ..
                     "{3FA9F5}/taghud{FFFFFF} - Включить/выключить HUD\n" ..
+                    "{3FA9F5}/sk <часы>{FFFFFF} - Расчет исп. срока (нужно открыть диалог 0)\n" ..
                     "{3FA9F5}/cnick {FFFFFF} - Включить/выключить проверку ника\n" ..
-                    "{3FA9F5}/snick <ник>{FFFFFF} - Установить ручной ник (clear для сброса)\n" ..
-                    "{3FA9F5}/pcuff{FFFFFF} - Включить/выключить функцию сковывания\n" ..
-                    "{3FA9F5}/pdep{FFFFFF} - Включить/выключить команды /dep и /depc\n" ..
-                    "{3FA9F5}/phelp{FFFFFF} - Показать это окно\n\n" ..
-                    "{FFFF00}Текущие настройки:{FFFFFF}\n" ..
-                    "Тег: {6fc3ff}[" .. (tag or "не установлен") .. "]{ffffff}\n" ..
-                    "HUD: " .. (drawEnabled and "{00FF00}ВКЛ" or "{FF0000}ВЫКЛ") .. "{FFFFFF}\n" ..
-                    "C.C.: " .. (ccMode and "{00FF00}ВКЛ" or "{FF0000}ВЫКЛ") .. "{FFFFFF}\n" ..
-                    "Проверка ника: " .. (config.nickname.check_enabled and "{00FF00}ВКЛ" or "{FF0000}ВЫКЛ") .. "{FFFFFF}\n" ..
-                    "Ручной ник: " .. (config.nickname.manual ~= "" and "{6FC3FF}" .. config.nickname.manual .. "{FFFFFF}" or "{FF0000}не установлен{FFFFFF}") .. "\n" ..
-                    "Авто /gotome: " .. (CUFF_ENABLED and "{00FF00}ВКЛ" or "{FF0000}ВЫКЛ") .. "{FFFFFF}\n" ..
-                    "Команды департамента: " .. (DEP_ENABLED and "{00FF00}ВКЛ" or "{FF0000}ВЫКЛ") .. "{FFFFFF}\n" ..
-                    "Сохранённый ник: " .. (config.nickname.saved ~= "" and "{6FC3FF}" .. config.nickname.saved .. "{FFFFFF}" or "{FF0000}не сохранён{FFFFFF}") .. "\n" ..
-                    "Текущий ник: " .. (MY_NICKNAME and "{6FC3FF}" .. MY_NICKNAME .. "{FFFFFF}" or "{FF0000}не определён{FFFFFF}")
+                    "{3FA9F5}/snick <ник>{FFFFFF} - Ручной ник (clear для сброса)\n" ..
+                    "{3FA9F5}/pcuff{FFFFFF} - Включить/выключить авто /gotome\n" ..
+                    "{3FA9F5}/pdep{FFFFFF} - Включить/выключить функции депа\n" ..
+                    "{3FA9F5}/invzv <ID>{FFFFFF} - Принять по заявлению\n" ..
+                    "{3FA9F5}/phelp{FFFFFF} - Это окно"
+                    
     
     sampShowDialog(1000, "Справка по командам", helpText, "Закрыть", "", 0)
 end
 
 function sampev.onSendCommand(command)
     local cmd = command:lower()
-    
     if cmd:find("^/dep") and not cmd:find("^/depc") then
-        if not DEP_ENABLED then
-            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Команды департамента {ff0000}отключены{ffffff}. Включите через /pdep", -1)
-            return false
-        end
+        if not DEP_ENABLED then return false end
         cmdDepartment(command:sub(6))
         return false
-        
     elseif cmd:find("^/depc") then
-        if not DEP_ENABLED then
-            sampAddChatMessage("{3fa9f5}[PH] {ffffff}Команды департамента {ff0000}отключены{ffffff}. Включите через /pdep", -1)
-            return false
-        end
         cmdToggleCC()
         return false
     end
